@@ -1,0 +1,10 @@
+{
+  "spotify": {
+    "clients": {
+      "spillelista": {
+        "clientId": "YOUR_CLIENT_ID_HERE",
+        "comment": "Get your Client ID from https://developer.spotify.com/dashboard — safe to commit, not a secret"
+      }
+    }
+  }
+}
