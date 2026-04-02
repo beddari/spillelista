@@ -498,7 +498,7 @@ async function fetchAllPlaylistTracks(playlistId) {
   let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=next,items(track(id,name,uri,duration_ms,album(name,release_date,images),artists(name)))`;
   while (url) {
     const data = await apiFetch(url);
-    if (!data) break;
+    if (!data || !data.items) break;
     results = results.concat(
       data.items
         .filter(i => i.track && i.track.uri && !i.track.uri.includes('episode'))
