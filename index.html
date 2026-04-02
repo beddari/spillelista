@@ -69,7 +69,6 @@
     button:hover { opacity: 0.85; }
     button:disabled { opacity: 0.4; cursor: default; }
 
-    /* Card flip */
     #game { display: none; flex-direction: column; align-items: center; gap: 24px; }
 
     .card-scene {
@@ -150,7 +149,6 @@
       font-style: italic;
     }
 
-    /* Progress bar */
     #progress-bar-container {
       width: 340px;
       height: 6px;
@@ -262,7 +260,6 @@
 
 <h1>🎵 Spillelista</h1>
 
-<!-- SETUP SCREEN -->
 <div id="setup">
   <h2>Gjett sangene fra spillelisten din</h2>
   <div id="status"></div>
@@ -277,12 +274,7 @@
   <div id="playlist-section" style="display:none; flex-direction:column; gap:12px;">
     <p style="color:var(--accent);font-size:0.9rem;">✅ Innlogget som <strong id="user-display"></strong></p>
     <p style="color:var(--muted);font-size:0.9rem;">Steg 2 — Lim inn en Spotify-spilleliste</p>
-    <input
-      type="text"
-      id="playlist-input"
-      placeholder="Spilleliste-URL eller ID"
-    />
-    <!-- Playlist preview -->
+    <input type="text" id="playlist-input" placeholder="Spilleliste-URL eller ID" />
     <div id="playlist-preview" style="display:none; align-items:center; gap:12px; background:#2a2a2a; border-radius:10px; padding:10px 14px;">
       <img id="preview-img" src="" style="width:44px;height:44px;border-radius:6px;object-fit:cover;" />
       <div>
@@ -294,9 +286,7 @@
   </div>
 </div>
 
-<!-- GAME SCREEN -->
 <div id="game">
-  <!-- Playlist info bar -->
   <div class="playlist-meta" id="playlist-meta">
     <img id="meta-img" src="" alt=""/>
     <div class="pl-info">
@@ -344,9 +334,10 @@
 
 <script>
 // ─────────────────────────────────────────────
-// CONFIG
+// CONFIG — loaded from config.json at boot
+// The page name key matches spotify.clients.<key>
 // ─────────────────────────────────────────────
-const CLIENT_ID = 'YOUR_CLIENT_ID_HERE'; // <-- Replace with your Spotify App Client ID
+const PAGE_NAME = 'spillelista';
 const REDIRECT_URI = window.location.origin + window.location.pathname;
 const SCOPES = [
   'streaming',
@@ -357,6 +348,21 @@ const SCOPES = [
   'playlist-read-private',
   'playlist-read-collaborative',
 ].join(' ');
+
+let CLIENT_ID = null;
+
+async function loadConfig() {
+  const res = await fetch('./config.json');
+  if (!res.ok) throw new Error('Kunne ikke laste config.json');
+  const config = await res.json();
+  const client = config?.spotify?.clients?.[PAGE_NAME];
+  if (!client?.clientId || client.clientId === 'YOUR_CLIENT_ID_HERE') {
+    throw new Error(
+      `Sett inn Spotify Client ID for "${PAGE_NAME}" i config.json`
+    );
+  }
+  CLIENT_ID = client.clientId;
+}
 
 // ─────────────────────────────────────────────
 // STATE
@@ -572,8 +578,6 @@ async function loadPlaylist() {
     tracks = shuffle(allTracks);
     currentIndex = 0;
     setStatus('');
-
-    // Pass playlist meta to game screen
     startGame(meta);
   } catch (e) {
     setStatus('Feil ved lasting av spilleliste: ' + e.message, true);
@@ -596,7 +600,6 @@ function startGame(meta) {
   game.style.display = 'flex';
   document.getElementById('total').textContent = tracks.length;
 
-  // Show playlist meta bar
   if (meta) {
     const metaEl = document.getElementById('playlist-meta');
     document.getElementById('meta-name').textContent = meta.name || '';
@@ -728,9 +731,17 @@ function setStatus(msg, isError = false) {
 }
 
 // ─────────────────────────────────────────────
-// BOOT
+// BOOT — load config first, then handle OAuth
 // ─────────────────────────────────────────────
 async function boot() {
+  try {
+    await loadConfig();
+  } catch (e) {
+    setStatus('⚠️ ' + e.message, true);
+    document.getElementById('login-btn').disabled = true;
+    return;
+  }
+
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
 
