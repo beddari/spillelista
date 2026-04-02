@@ -476,7 +476,12 @@ async function apiFetch(url) {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
   if (res.status === 204) return null;
-  return res.json();
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = data?.error?.message || res.statusText || res.status;
+    throw new Error(`Spotify API ${res.status}: ${msg}`);
+  }
+  return data;
 }
 
 async function playTrack(uri) {
