@@ -602,7 +602,11 @@ async function loadPlaylist() {
     setStatus('');
     startGame(meta);
   } catch (e) {
-    setStatus('Feil ved lasting av spilleliste: ' + e.message, true);
+    let msg = 'Feil ved lasting av spilleliste: ' + e.message;
+    if (/\b403\b/.test(e.message)) {
+      msg += ' — Spotify-eide spillelister (Discover Weekly, Daily Mix, redaksjonelle lister) er ikke tilgjengelige for apper i utviklingsmodus. Prøv en spilleliste du har laget selv.';
+    }
+    setStatus(msg, true);
     document.getElementById('start-btn').disabled = false;
   }
 }
