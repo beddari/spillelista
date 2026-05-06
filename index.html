@@ -422,14 +422,15 @@ async function exchangeCode(code) {
     }),
   });
   const data = await res.json();
-  if (data.access_token) {
-    accessToken = data.access_token;
-    sessionStorage.setItem('spotify_token', accessToken);
-    sessionStorage.removeItem('pkce_verifier');
-    window.history.replaceState({}, '', window.location.pathname);
-  } else {
+  if (!data.access_token) {
     setStatus('Innlogging feilet: ' + (data.error_description || data.error), true);
+    return false;
   }
+  accessToken = data.access_token;
+  sessionStorage.setItem('spotify_token', accessToken);
+  sessionStorage.removeItem('pkce_verifier');
+  window.history.replaceState({}, '', window.location.pathname);
+  return true;
 }
 
 // ─────────────────────────────────────────────
@@ -485,7 +486,10 @@ async function apiFetch(url) {
 }
 
 async function playTrack(uri) {
-  await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+  if (!deviceId) {
+    throw new Error('Spilleren er ikke klar ennå. Vent et øyeblikk og prøv igjen.');
+  }
+  const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -493,6 +497,14 @@ async function playTrack(uri) {
     },
     body: JSON.stringify({ uris: [uri] }),
   });
+  if (!res.ok && res.status !== 204) {
+    let detail = res.statusText || res.status;
+    try {
+      const data = await res.json();
+      detail = data?.error?.message || detail;
+    } catch (_) {}
+    throw new Error(`Avspilling feilet (${res.status}): ${detail}`);
+  }
   isPlaying = true;
   document.getElementById('play-pause-btn').textContent = '⏸';
   startProgressBar();
@@ -506,7 +518,12 @@ async function fetchAllPlaylistTracks(playlistId) {
     if (!data || !data.items) break;
     results = results.concat(
       data.items
-        .filter(i => i.track && i.track.uri && !i.track.uri.includes('episode'))
+        .filter(i =>
+          i.track &&
+          i.track.uri &&
+          !i.track.is_local &&
+          i.track.uri.startsWith('spotify:track:')
+        )
         .map(i => i.track)
     );
     url = data.next;
@@ -648,7 +665,11 @@ async function loadCurrentTrack() {
   img.src = track.album.images && track.album.images.length ? track.album.images[0].url : '';
 
   setStatus('🎵 Lytt og gjett...');
-  await playTrack(track.uri);
+  try {
+    await playTrack(track.uri);
+  } catch (e) {
+    setStatus(e.message, true);
+  }
 }
 
 function revealCard() {
@@ -669,7 +690,12 @@ async function restartTrack() {
   stopProgressBar();
   resetProgressBar();
   const track = tracks[currentIndex];
-  if (track) await playTrack(track.uri);
+  if (!track) return;
+  try {
+    await playTrack(track.uri);
+  } catch (e) {
+    setStatus(e.message, true);
+  }
 }
 
 async function togglePlayPause() {
@@ -760,18 +786,21 @@ async function boot() {
   if (accessToken) {
     try {
       const me = await apiFetch('https://api.spotify.com/v1/me');
-      if (me && me.display_name) {
-        document.getElementById('user-display').textContent = me.display_name;
+      if (me && me.id) {
+        document.getElementById('user-display').textContent = me.display_name || me.email || me.id;
         document.getElementById('auth-section').style.display = 'none';
         document.getElementById('playlist-section').style.display = 'flex';
         setStatus('');
         await initPlayer();
       } else {
         sessionStorage.removeItem('spotify_token');
+        accessToken = null;
         setStatus('Sesjonen er utløpt. Logg inn på nytt.', true);
       }
     } catch (e) {
-      setStatus('Kunne ikke hente brukerinfo.', true);
+      sessionStorage.removeItem('spotify_token');
+      accessToken = null;
+      setStatus('Kunne ikke hente brukerinfo: ' + e.message, true);
     }
   }
 }
